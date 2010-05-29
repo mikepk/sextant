@@ -10,7 +10,7 @@ Requirements
 ------------
 
   * numpy
-  * PyStemmer 0.1.1 (included)
+  * PyStemmer 1.1.0 (included)
 
 Future
 ------
@@ -21,3 +21,4 @@ License
 =======
 
 Sextant is distributed under the `MIT license <http://www.opensource.org/licenses/mit-license.php>`_. See LICENSE.
+PyStemmer 0.1.1 and snowball carry their own licenses which can be read under the PyStemmer-1.1.0/ directory.
