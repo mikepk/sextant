@@ -191,7 +191,7 @@ ix = 0
 for doc in docs:
     #term_vectors = make_bag_of_words(doc[1])
     vector_doc = Doc(doc[1],0,doc[0])
-    for z in range(6000):
+    for z in range(1):
         # new_tv = ( term_vectors[0].copy(),term_vectors[1].copy() )
         ix+=1
         doc_cp = copy.deepcopy(vector_doc)
