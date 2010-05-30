@@ -15,13 +15,13 @@ import math
 import re
 
 from numpy.random import rand, randint
-from numpy import int8,int16,uint16, float32
+from numpy import int8,int16,uint16,uint32,float32
 
 from numpy import dot, resize
 from numpy.linalg import norm
 from numpy import array, zeros, ones, empty
 
-import stopwords
+from stopwords import stopwords
 
 # using the snowball stemmer
 # PyStemmer 1.1
@@ -43,9 +43,9 @@ class Doc(object):
         self.term_freq = None
         if text:
             self.parse(text)
-        self.values = None # self.normalized_term_freq()
+        self.values = None
         self.tfidf = None
-        #self.sparse = (self.indicies,self.values)
+        self.col = None
 
     def expand(self):
         '''Return expanded vector.'''
@@ -53,10 +53,13 @@ class Doc(object):
         A[self.indicies] = self.values
         return A
 
+    def compute_binary(self):
+        '''Use singular presence/absence weighting.'''
+        pass
+
     def compute_tfidf(self):
-        '''Change the weight scheme to tfidf'''
-        # tfidf computation
-        self.tfidf = array( self.normalized_term_freq() * all_docs.idf[self.indicies],dtype=float32)
+        '''Apply the weight scheme to tfidf'''
+        self.tfidf = array( self.normalized_term_freq() * people.idf[self.indicies],dtype=float32)
         self.values = self.tfidf
         return 1
     
@@ -77,14 +80,16 @@ class Doc(object):
         for word in words:
             # drop empty strings, single letters/numbers and anything in the stopwords
             # list
-            if len(word) <= 1 or word in stopwords.stopwords:
+            if len(word) <= 1 or word in stopwords:
                 continue
 
+            # stemming does a morphological reduction on terms
+            # i.e. jumping and jumped collapse to jump
             word = stemmer.stemWord(word)
             word.strip("\'")
 
             # collect terms and term counts
-            index = mv.get_pos(word,expand)
+            index = mv.index(word,expand)
             if index >= 0:
                 try:
                     terms[index]+=1
@@ -94,7 +99,6 @@ class Doc(object):
         term_count = len(terms)
         self.indicies = empty(term_count,uint16)
         self.term_freq = empty(term_count,uint16)
-        #normalized = empty(term_count,float32)
 
         i = 0
         for index in terms:
@@ -106,36 +110,80 @@ class Doc(object):
 
 
     def __repr__(self):
-        return str("Doc %s" % self.name)
+        return str("<Doc %s, %s>" % (self.id,self.name))
 
 class Query(Doc):
     '''Query Object'''
+    # TODO: change weighting schemes based on some
+    # global setting
     def __init__(self,text):
         Doc.__init__(self)
         self.parse(text,False)
         self.values = self.normalized_term_freq()
+        self.normalize_vector()
         
 
 class DocumentCollection(object):
     def __init__(self,name):
         self.name = name
-        self.term_df = zeros(0)
+        self.term_df = zeros(0,dtype=uint32)
         self.idf = None
         self.total_docs = 0
+        self.documents = []
 
-    def add(self,vec):
-        '''When a document is parsed, increment the document term frequency.'''
+    def __getitem__(self,index):
+        '''Allow direct indexing of documents.'''
+        return self.documents[index]
+
+    def add_text(self,name=None,doc_id=None,text=None):
+        '''Add a term set to the document collection.'''
+        doc = Doc(name,doc_id,text)
+        self.documents.append(doc)
+        self.add_count(doc)
+
+    def add_doc(self,doc):
+        '''Add an existing document to the collection.'''
+        self.documents.append(doc)
+        self.add_count(doc)
+
+    def add_count(self,doc):
+        '''Increment the document term frequency.'''
+
+        # expand to master vector size, then set 1, for all terms that
+        # exist
+        term_doc_count = zeros(mv.size, dtype=uint16)
+        term_doc_count[doc.indicies] = 1
+
         self.total_docs += 1
         #if self.term_df.size != vec.size:
-        self.term_df.resize(vec.size)
-        self.term_df += vec
+        self.term_df.resize(term_doc_count.size)
+        self.term_df += term_doc_count
 
     def compute_idf(self):
         '''Recompute the inverse document frequency.'''
         # IDF is the log of the total documents / the number of documents that the term appears. This
         # term weight makes uncommon terms more significant than common ones.
-        self.idf = array([math.log(all_docs.total_docs / i, 10 ) for i in all_docs.term_df],dtype=float32)
-        
+        self.idf = array([math.log(self.total_docs / i, 10 ) for i in self.term_df],dtype=float32)
+
+    # def query(self,text):
+    def query(self,text):
+        results = []
+        # create a vector but don't add to the master vector
+        q_vec = Query(text).expand()
+        # compare the query to all docs
+        for vec in self.documents:
+            results.append((vec.id, vec.name,
+            sim( 
+                q_vec,
+                vec.expand()
+                ) 
+            ))
+
+        return sorted(results, key=lambda result: result[2], reverse=True)[:20]
+
+
+    def __repr__(self):
+        return str(self.documents)
 
 class MasterVector(object):
     '''Object to hold the master vector, all terms seen by the engine.'''
@@ -143,7 +191,11 @@ class MasterVector(object):
         self.master = []
         self.size = 0
     
-    def get_pos(self,word,expand=True):
+    def __getitem__(self,index):
+        '''Allow direct indexing of documents.'''
+        return self.master[index]
+    
+    def index(self,word,expand=True):
         if word in self.master:
             return self.master.index(word)
         else:
@@ -159,6 +211,9 @@ class MasterVector(object):
             return self.master[pos]
         except IndexError:
             return -1
+            
+    def __repr__(self):
+        return str("<MasterVector size:%d>" % (self.size))
 
 
 class Usage(Exception):
@@ -166,7 +221,7 @@ class Usage(Exception):
 		self.msg = msg
 
 stemmer = Stemmer.Stemmer('english')
-all_docs = DocumentCollection("test")
+people = DocumentCollection("People")
 
 #def main(argv=None):
 mv = MasterVector()
@@ -191,32 +246,28 @@ ix = 0
 for doc in docs:
     #term_vectors = make_bag_of_words(doc[1])
     vector_doc = Doc(doc[1],0,doc[0])
-    for z in range(1):
-        # new_tv = ( term_vectors[0].copy(),term_vectors[1].copy() )
+    vector_doc.values = vector_doc.normalized_term_freq()
+    vector_doc.normalize_vector()
+
+    for z in range(5000):
         ix+=1
         doc_cp = copy.deepcopy(vector_doc)
         doc_cp.id = ix
-        tv.append(doc_cp)
         
-        term_doc_count = zeros(mv.size, dtype=uint16)
-        term_doc_count[doc_cp.indicies] = 1
-
-        all_docs.add(term_doc_count)
+        people.add_doc(doc_cp)
+        
+        # tv.append(doc_cp)
+        # 
+        # term_doc_count = zeros(mv.size, dtype=uint16)
+        # term_doc_count[doc_cp.indicies] = 1
+        # 
+        # people.add(term_doc_count)
         
         
-print "Number %d" % ix
+print "Total Documents %d" % ix
 
-def ti():
-    for t in tv:
-        t.compute_tfidf()
-        t.normalize_vector()
-
-print "Computing idf..."
-all_docs.compute_idf()
-print "done"
-
-print "Using tfidf"
-ti()
+print "Computing Document idf..."
+people.compute_idf()
 print "done"
 
 
