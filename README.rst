@@ -8,17 +8,17 @@ It can be used with both normalized raw term frequency weighting or term frequen
 Requirements
 ------------
 
-  * `numpy <http://numpy.scipy.org/>`_
-  * `PyStemmer 1.1.0 (included) <http://snowball.tartarus.org/>`_
+* `numpy <http://numpy.scipy.org/>`_
+* `PyStemmer 1.1.0 (included) <http://snowball.tartarus.org/>`_
 
 Future
 ------
 
-  * Use a leader / follower vector search to improve memory utilization and comparison speed
-  * Add memory paging of vector collections to reduce the requirement for the whole collection to be in memory
-  * Allow multiple document collections
-  * Improve memory usage
-  * Add additional weighting modes
+* Use a leader / follower vector search to improve memory utilization and comparison speed
+* Add memory paging of vector collections to reduce the requirement for the whole collection to be in memory
+* Allow multiple document collections
+* Improve memory usage
+* Add additional weighting modes
 
 License
 =======
