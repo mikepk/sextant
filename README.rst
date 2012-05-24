@@ -9,7 +9,6 @@ Requirements
 ------------
 
 * `numpy <http://numpy.scipy.org/>`_
-* `PyStemmer 1.1.0 (included) <http://snowball.tartarus.org/>`_
 
 Future
 ------
